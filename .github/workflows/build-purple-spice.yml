@@ -1,0 +1,38 @@
+name: Purple Spice bauen
+
+# Baut das Hi-Hat-Plugin "Purple Spice" automatisch auf GitHub.
+# Ergebnis: Reiter "Actions" -> letzter Lauf -> unten bei "Artifacts" herunterladen.
+
+on:
+  push:
+    paths:
+      - 'PurpleSpice/**'
+      - '.github/workflows/build-purple-spice.yml'
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Konfigurieren
+        run: cmake -S PurpleSpice -B build -A x64
+      - name: Bauen
+        run: cmake --build build --config Release --parallel
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PurpleSpice-Windows-VST3
+          path: build/PurpleSpice_artefacts/Release/VST3/
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Konfigurieren
+        run: cmake -S PurpleSpice -B build -G Xcode "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64"
+      - name: Bauen
+        run: cmake --build build --config Release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PurpleSpice-macOS-VST3
+          path: build/PurpleSpice_artefacts/Release/VST3/

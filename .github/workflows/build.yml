@@ -5,6 +5,9 @@ name: Plugin bauen
 
 on:
   push:
+    paths-ignore:
+      - 'PurpleSpice/**'
+      - '.github/workflows/build-purple-spice.yml'
   workflow_dispatch:
 
 jobs:

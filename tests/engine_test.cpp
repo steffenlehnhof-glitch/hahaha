@@ -130,24 +130,63 @@ int main()
     CHECK (bytes.size() > 40 && bytes[0] == 'M' && bytes[3] == 'd', "midi header");
     std::ofstream ("/tmp/purr_test.mid", std::ios::binary).write ((const char*) bytes.data(), (std::streamsize) bytes.size());
 
+    // Presets: jede Folge laden, in mehrere Tonarten setzen, variieren
+    std::printf ("\n%d Presets\n", numPresets());
+    for (int i = 0; i < numPresets(); ++i)
+    {
+        Engine pe ((uint32_t) (99 + i));
+        pe.s.key = (i * 5) % 12;
+        pe.loadPreset (i);
+        CHECK ((int) pe.chords.size() == preset (i).n && pe.s.scale == preset (i).scale, "preset loads");
+        pe.buildProgData (p);
+        checkProg (pe, p);
+        std::string names;
+        for (const auto& c : pe.chords) names += pe.chordName (c) + " ";
+        std::printf ("  %-8s %-18s %-44s %s\n", presetCategoryName (preset (i).category), preset (i).name,
+                     Engine::presetRomans (i).c_str(), names.c_str());
+        pe.transpose (3);
+        pe.vary(); pe.rerollChord (1);
+        pe.buildProgData (p);
+        checkProg (pe, p);
+    }
+
+    // Instrumente: Pegel und Stimmung (A4 = 440 Hz)
     PreviewSynth synth;
     synth.prepare (48000.0);
     static float L[48000], R[48000];
-    for (int snd = 1; snd <= 3; ++snd)
+    for (int snd = 1; snd < kNumSounds; ++snd)
     {
+        // einzelner Ton -> Grundfrequenz per Autokorrelation
         std::fill (L, L + 48000, 0.0f); std::fill (R, R + 48000, 0.0f);
+        synth.prepare (48000.0);
+        synth.setSound (snd);
+        synth.noteOn (69, 0.8f);
+        synth.render (L, R, 48000);
+        double best = -1.0e9; int bestLag = 0;
+        for (int lag = 90; lag <= 130; ++lag)
+        {
+            double acc = 0.0;
+            for (int i = 20000; i < 30000; ++i) acc += (double) L[i] * (double) L[i + lag];
+            if (acc > best) { best = acc; bestLag = lag; }
+        }
+        const double freq = 48000.0 / bestLag;
+
+        // Akkord -> Pegel
+        std::fill (L, L + 48000, 0.0f); std::fill (R, R + 48000, 0.0f);
+        synth.prepare (48000.0);
         synth.setSound (snd);
         for (int k = 0; k < p.chordSize[0]; ++k) synth.noteOn (p.chordNotes[0][k], 0.8f);
         synth.render (L, R, 24000);
         for (int k = 0; k < p.chordSize[0]; ++k) synth.noteOff (p.chordNotes[0][k]);
         synth.render (L + 24000, R + 24000, 24000);
         float peak = 0.0f, rms = 0.0f;
-        for (int i = 0; i < 48000; ++i) { peak = std::max (peak, std::abs (L[i])); rms += L[i] * L[i]; }
+        bool finite = true;
+        for (int i = 0; i < 48000; ++i) { peak = std::max (peak, std::abs (L[i])); rms += L[i] * L[i]; finite = finite && std::isfinite (L[i]); }
         rms = std::sqrt (rms / 48000.0f);
-        std::printf ("Synth %d: peak %.3f rms %.3f\n", snd, peak, rms);
-        CHECK (peak > 0.05f && peak < 1.0f && std::isfinite (rms), "synth level");
-        synth.allNotesOff();
-        synth.render (L, R, 48000);
+        std::printf ("%-9s Grundton %.1f Hz, Akkord: peak %.3f rms %.3f\n", soundName (snd), freq, peak, rms);
+        CHECK (finite && peak > 0.05f && peak < 0.98f, "synth level");
+        CHECK (rms > 0.02f && rms < 0.45f, "synth loudness");
+        if (snd != 7) CHECK (std::abs (freq - 440.0) < 6.0, "synth tuning");   // Bell ist absichtlich unharmonisch
     }
 
     std::printf ("\n%s (%d Fehler)\n", failures == 0 ? "ALLE TESTS OK" : "TESTS FEHLGESCHLAGEN", failures);

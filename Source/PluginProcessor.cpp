@@ -32,6 +32,9 @@ PurrgressionProcessor::PurrgressionProcessor()
 void PurrgressionProcessor::prepareToPlay (double sampleRate, int)
 {
     synth.prepare (sampleRate);
+    reverb.setSampleRate (sampleRate);
+    reverb.reset();
+    lastReverb = -1.0f;
     lastSound = -1;
     numActive = 0;
     running.store (false);
@@ -313,6 +316,27 @@ void PurrgressionProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
 
         if (cursor < numSamples)
             synth.render (left + cursor, right != nullptr ? right + cursor : nullptr, numSamples - cursor);
+
+        // Hall auf dem eingebauten Sound
+        const float rv = reverbAmount.load();
+        if (snd > 0 && rv > 0.004f)
+        {
+            if (std::abs (rv - lastReverb) > 0.001f)
+            {
+                juce::Reverb::Parameters rp;
+                rp.roomSize   = 0.5f + 0.42f * rv;
+                rp.damping    = 0.45f;
+                rp.wetLevel   = 0.22f * rv;
+                rp.dryLevel   = 0.5f * (1.0f - 0.2f * rv);     // 0.5 = unveraenderter Pegel
+                rp.width      = 1.0f;
+                rp.freezeMode = 0.0f;
+                reverb.setParameters (rp);
+                lastReverb = rv;
+            }
+
+            if (right != nullptr) reverb.processStereo (left, right, numSamples);
+            else                  reverb.processMono (left, numSamples);
+        }
     }
 
     midi.swapWith (midiOut);
@@ -369,11 +393,13 @@ PurrgressionProcessor::SettingsResult PurrgressionProcessor::updateSettings (con
     s.voicing   = juce::jlimit (0, (int) purr::kNumVoicings - 1, s.voicing);
     s.pattern   = juce::jlimit (0, (int) purr::kNumPatterns - 1, s.pattern);
     s.octave    = juce::jlimit (-1, 1, s.octave);
-    s.sound     = juce::jlimit (0, 3, s.sound);
+    s.sound     = juce::jlimit (0, purr::kNumSounds - 1, s.sound);
+    s.reverb    = juce::jlimit (0.0f, 1.0f, s.reverb);
     engine.s = s;
 
     hostSync.store (s.hostSync);
     sound.store (s.sound);
+    reverbAmount.store (s.reverb);
 
     auto result = SettingsResult::soundOnly;
 
@@ -382,6 +408,7 @@ PurrgressionProcessor::SettingsResult PurrgressionProcessor::updateSettings (con
         if (s.key != old.key)
             engine.transpose (s.key - old.key);
         engine.generate();
+        currentPreset = -1;
         pushHistory();
         result = SettingsResult::regenerated;
     }
@@ -402,6 +429,7 @@ PurrgressionProcessor::SettingsResult PurrgressionProcessor::updateSettings (con
         if (s.numChords != (int) engine.chords.size())
         {
             engine.resize (s.numChords);
+            currentPreset = -1;
             pushHistory();
             result = SettingsResult::resized;
         }
@@ -440,9 +468,28 @@ juce::String PurrgressionProcessor::getKeyLabel() const
          + juce::String::fromUTF8 (purr::scaleDef (engine.s.scale).name);
 }
 
+void PurrgressionProcessor::loadPreset (int presetIndex)
+{
+    const juce::ScopedLock sl (stateLock);
+    if (presetIndex < 0 || presetIndex >= purr::numPresets())
+        return;
+
+    engine.loadPreset (presetIndex);
+    currentPreset = presetIndex;
+    pushHistory();
+    publish();
+}
+
+int PurrgressionProcessor::getCurrentPreset() const
+{
+    const juce::ScopedLock sl (stateLock);
+    return currentPreset;
+}
+
 void PurrgressionProcessor::generate()
 {
     const juce::ScopedLock sl (stateLock);
+    currentPreset = -1;
     engine.generate();
     pushHistory();
     publish();
@@ -451,6 +498,7 @@ void PurrgressionProcessor::generate()
 void PurrgressionProcessor::vary()
 {
     const juce::ScopedLock sl (stateLock);
+    currentPreset = -1;
     engine.vary();
     pushHistory();
     publish();
@@ -459,6 +507,7 @@ void PurrgressionProcessor::vary()
 void PurrgressionProcessor::rerollChord (int index)
 {
     const juce::ScopedLock sl (stateLock);
+    currentPreset = -1;
     engine.rerollChord (index);
     pushHistory();
     publish();
@@ -494,6 +543,7 @@ bool PurrgressionProcessor::stepHistory (int direction)
         return false;
 
     historyPos = target;
+    currentPreset = -1;
     const auto& snap = history[(size_t) target];
     engine.chords    = snap.chords;
     engine.humanSeed = snap.seed;
@@ -535,7 +585,7 @@ void PurrgressionProcessor::getStateInformation (juce::MemoryBlock& destData)
     const auto& s = engine.s;
 
     juce::XmlElement xml ("PURRGRESSION");
-    xml.setAttribute ("version", 1);
+    xml.setAttribute ("version", 2);
     xml.setAttribute ("key", s.key);
     xml.setAttribute ("scale", s.scale);
     xml.setAttribute ("style", s.style);
@@ -550,6 +600,7 @@ void PurrgressionProcessor::getStateInformation (juce::MemoryBlock& destData)
     xml.setAttribute ("bass", s.bass ? 1 : 0);
     xml.setAttribute ("voiceLead", s.voiceLead ? 1 : 0);
     xml.setAttribute ("sound", s.sound);
+    xml.setAttribute ("reverb", (double) s.reverb);
     xml.setAttribute ("hostSync", s.hostSync ? 1 : 0);
     xml.setAttribute ("seed", (int) engine.humanSeed);
 
@@ -591,7 +642,13 @@ void PurrgressionProcessor::setStateInformation (const void* data, int sizeInByt
     s.octave    = juce::jlimit (-1, 1, xml->getIntAttribute ("octave", s.octave));
     s.bass      = xml->getIntAttribute ("bass", 1) != 0;
     s.voiceLead = xml->getIntAttribute ("voiceLead", 1) != 0;
-    s.sound     = juce::jlimit (0, 3, xml->getIntAttribute ("sound", s.sound));
+    s.sound     = juce::jlimit (0, purr::kNumSounds - 1, xml->getIntAttribute ("sound", s.sound));
+    if (xml->getIntAttribute ("version", 1) < 2)
+    {
+        static const int oldToNew[4] = { 0, 1, 3, 6 };     // Version 1 kannte nur Keys, Pad, Pluck
+        s.sound = oldToNew[juce::jlimit (0, 3, s.sound)];
+    }
+    s.reverb    = juce::jlimit (0.0f, 1.0f, (float) xml->getDoubleAttribute ("reverb", s.reverb));
     s.hostSync  = xml->getIntAttribute ("hostSync", 1) != 0;
 
     std::vector<purr::Chord> loaded;
@@ -626,6 +683,8 @@ void PurrgressionProcessor::setStateInformation (const void* data, int sizeInByt
 
     hostSync.store (engine.s.hostSync);
     sound.store (engine.s.sound);
+    reverbAmount.store (engine.s.reverb);
+    currentPreset = -1;
 
     history.clear();
     historyPos = -1;

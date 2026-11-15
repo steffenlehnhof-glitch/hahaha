@@ -198,7 +198,8 @@ struct Settings
     int   octave    = 0;          // -1..+1
     bool  bass      = true;
     bool  voiceLead = true;
-    int   sound     = 1;          // 0 = aus, 1 = Keys, 2 = Pad, 3 = Pluck
+    int   sound     = 1;          // 0 = aus, 1.. = Instrument (siehe PreviewSynth.h)
+    float reverb    = 0.25f;      // Hall-Anteil des eingebauten Sounds
     bool  hostSync  = true;
 };
 
@@ -220,6 +221,107 @@ struct ProgData
     int    numEvents     = 0;
     NoteEvent events[kMaxEvents];
 };
+
+// ----------------------------------------------------------------------------
+//  Presets: bekannte und haeufig benutzte Akkordfolgen
+//  Jeder Akkord = { Halbtoene ueber der Tonika, Akkordtyp }. Beim Laden wird die
+//  Folge in die eingestellte Tonart gesetzt.
+// ----------------------------------------------------------------------------
+enum PresetCategory { kCatPop, kCatTrap, kCatHipHop, kCatLoFi, kCatJazz, kCatRnB, kCatDark, kNumPresetCategories };
+
+inline const char* presetCategoryName (int id)
+{
+    static const char* n[kNumPresetCategories] = { "Pop", "Trap", "Hip-Hop", "Lo-Fi", "Jazz", "R&B", "D\xc3\xbcster" };
+    return n[std::clamp (id, 0, (int) kNumPresetCategories - 1)];
+}
+
+struct PresetChord { int offset; int type; };
+
+struct Preset
+{
+    const char* name;      // UTF-8
+    int category;
+    int scale;
+    int style;             // -1 = Stil nicht aendern
+    int n;
+    PresetChord c[kMaxChords];
+};
+
+inline const Preset* presetTable (int& count)
+{
+    static const Preset t[] = {
+        // ---- Pop ----------------------------------------------------------------
+        { "Pop-Hymne",        kCatPop, kMajor,      -1, 4, { { 0, T_MAJ }, { 7, T_MAJ }, { 9, T_MIN }, { 5, T_MAJ } } },
+        { "Gef\xc3\xbchlvoll", kCatPop, kMajor,     -1, 4, { { 9, T_MIN }, { 5, T_MAJ }, { 0, T_MAJ }, { 7, T_MAJ } } },
+        { "Doo-Wop",          kCatPop, kMajor,      -1, 4, { { 0, T_MAJ }, { 9, T_MIN }, { 5, T_MAJ }, { 7, T_MAJ } } },
+        { "Kanon",            kCatPop, kMajor,      -1, 8, { { 0, T_MAJ }, { 7, T_MAJ }, { 9, T_MIN }, { 4, T_MIN },
+                                                             { 5, T_MAJ }, { 0, T_MAJ }, { 5, T_MAJ }, { 7, T_MAJ } } },
+        { "Royal Road",       kCatPop, kMajor,      -1, 4, { { 5, T_MAJ7 }, { 7, T_7 }, { 4, T_M7 }, { 9, T_M7 } } },
+        { "Nostalgie",        kCatPop, kMajor,      -1, 4, { { 0, T_MAJ }, { 5, T_MAJ }, { 5, T_MIN }, { 0, T_MAJ } } },
+        { "Rock-Mixo",        kCatPop, kMixolydian, -1, 4, { { 0, T_MAJ }, { 10, T_MAJ }, { 5, T_MAJ }, { 0, T_MAJ } } },
+        { "Moll-Pop",         kCatPop, kNatMinor,   -1, 4, { { 0, T_MIN }, { 3, T_MAJ }, { 10, T_MAJ }, { 8, T_MAJ } } },
+
+        // ---- Trap ---------------------------------------------------------------
+        { "Trap-Klassiker",   kCatTrap, kNatMinor,  kTrap, 4, { { 0, T_MIN }, { 8, T_MAJ }, { 3, T_MAJ }, { 10, T_MAJ } } },
+        { "Dark Trap",        kCatTrap, kPhrygian,  kTrap, 4, { { 0, T_MIN }, { 1, T_MAJ }, { 0, T_MIN }, { 10, T_MIN } } },
+        { "Emo Trap",         kCatTrap, kHarmMinor, kTrap, 4, { { 0, T_MIN }, { 5, T_MIN }, { 8, T_MAJ }, { 7, T_MAJ } } },
+        { "Drill",            kCatTrap, kHarmMinor, kTrap, 4, { { 0, T_MIN }, { 8, T_MAJ7 }, { 5, T_M7 }, { 7, T_7 } } },
+        { "Mitternacht",      kCatTrap, kNatMinor,  kTrap, 4, { { 0, T_MIN }, { 10, T_MAJ }, { 8, T_MAJ }, { 10, T_MAJ } } },
+        { "Zwei-Akkord-Vamp", kCatTrap, kNatMinor,  kTrap, 2, { { 0, T_M7 }, { 8, T_MAJ7 } } },
+        { "Halbton-Grusel",   kCatTrap, kPhrygian,  kTrap, 2, { { 0, T_MIN }, { 1, T_MAJ7 } } },
+        { "Andalusisch",      kCatTrap, kHarmMinor, kTrap, 4, { { 0, T_MIN }, { 10, T_MAJ }, { 8, T_MAJ }, { 7, T_MAJ } } },
+        { "Sad Boy",          kCatTrap, kNatMinor,  kTrap, 4, { { 0, T_MADD9 }, { 3, T_MAJ }, { 10, T_MAJ }, { 5, T_MIN } } },
+
+        // ---- Hip-Hop --------------------------------------------------------------
+        { "Boom-Bap",         kCatHipHop, kNatMinor,  kHipHop, 4, { { 0, T_M7 }, { 5, T_M7 }, { 10, T_7 }, { 3, T_MAJ7 } } },
+        { "Dorian Groove",    kCatHipHop, kDorian,    kHipHop, 4, { { 0, T_M9 }, { 5, T_9 }, { 0, T_M9 }, { 5, T_13 } } },
+        { "Soul-Sample",      kCatHipHop, kMajor,     kHipHop, 4, { { 0, T_MAJ7 }, { 9, T_M7 }, { 2, T_M7 }, { 7, T_7 } } },
+        { "Golden Era",       kCatHipHop, kHarmMinor, kHipHop, 4, { { 0, T_M7 }, { 8, T_MAJ7 }, { 2, T_M7B5 }, { 7, T_7 } } },
+        { "Laid Back",        kCatHipHop, kMajor,     kHipHop, 4, { { 5, T_MAJ7 }, { 4, T_M7 }, { 9, T_M7 }, { 9, T_M9 } } },
+
+        // ---- Lo-Fi ----------------------------------------------------------------
+        { "Lo-Fi Klassiker",  kCatLoFi, kMajor,    kLoFi, 4, { { 2, T_M9 }, { 7, T_13 }, { 0, T_MAJ9 }, { 9, T_M7 } } },
+        { "Regentag",         kCatLoFi, kMajor,    kLoFi, 4, { { 5, T_MAJ7 }, { 4, T_M7 }, { 2, T_M7 }, { 0, T_MAJ7 } } },
+        { "Kaffeepause",      kCatLoFi, kMajor,    kLoFi, 2, { { 0, T_MAJ9 }, { 5, T_MAJ9 } } },
+        { "Mondlicht",        kCatLoFi, kNatMinor, kLoFi, 4, { { 8, T_MAJ7 }, { 10, T_7 }, { 0, T_M9 }, { 3, T_MAJ7 } } },
+        { "Fensterbank",      kCatLoFi, kMajor,    kLoFi, 4, { { 0, T_MAJ7 }, { 4, T_M7 }, { 9, T_M9 }, { 5, T_MAJ9 } } },
+        { "Sp\xc3\xa4tabends", kCatLoFi, kDorian,  kLoFi, 4, { { 0, T_M9 }, { 5, T_13 }, { 10, T_MAJ7 }, { 0, T_M69 } } },
+
+        // ---- Jazz -----------------------------------------------------------------
+        { "ii-V-I",           kCatJazz, kMajor,     kJazz, 4, { { 2, T_M9 }, { 7, T_13 }, { 0, T_MAJ9 }, { 0, T_69 } } },
+        { "ii-V-i in Moll",   kCatJazz, kHarmMinor, kJazz, 4, { { 2, T_M7B5 }, { 7, T_7B9 }, { 0, T_M9 }, { 0, T_M6 } } },
+        { "Turnaround",       kCatJazz, kMajor,     kJazz, 4, { { 0, T_MAJ7 }, { 9, T_7 }, { 2, T_M7 }, { 7, T_7 } } },
+        { "Quintfall",        kCatJazz, kHarmMinor, kJazz, 8, { { 5, T_M7 }, { 10, T_7 }, { 3, T_MAJ7 }, { 8, T_MAJ7 },
+                                                                { 2, T_M7B5 }, { 7, T_7B9 }, { 0, T_M9 }, { 0, T_M6 } } },
+        { "Tritonus-Sub",     kCatJazz, kMajor,     kJazz, 4, { { 2, T_M9 }, { 1, T_9S11 }, { 0, T_MAJ9 }, { 0, T_MAJ13 } } },
+        { "Backdoor",         kCatJazz, kMajor,     kJazz, 4, { { 5, T_M9 }, { 10, T_9 }, { 0, T_MAJ9 }, { 0, T_69 } } },
+        { "Rhythm Changes",   kCatJazz, kMajor,     kJazz, 8, { { 0, T_MAJ7 }, { 9, T_M7 }, { 2, T_M7 }, { 7, T_7 },
+                                                                { 4, T_M7 }, { 9, T_7 }, { 2, T_M7 }, { 7, T_7 } } },
+
+        // ---- R&B ------------------------------------------------------------------
+        { "Neo-Soul",         kCatRnB, kMajor,     kRnB, 4, { { 5, T_MAJ9 }, { 4, T_M7 }, { 2, T_M9 }, { 0, T_MAJ9 } } },
+        { "Slow Jam",         kCatRnB, kMajor,     kRnB, 4, { { 2, T_M9 }, { 7, T_9SUS4 }, { 0, T_MAJ9 }, { 9, T_M9 } } },
+        { "Smooth",           kCatRnB, kMajor,     kRnB, 4, { { 9, T_M9 }, { 2, T_M9 }, { 7, T_13 }, { 0, T_MAJ9 } } },
+        { "90er R&B",         kCatRnB, kHarmMinor, kRnB, 4, { { 0, T_M9 }, { 8, T_MAJ9 }, { 5, T_M9 }, { 7, T_7S9 } } },
+        { "Gospel",           kCatRnB, kMajor,     kRnB, 4, { { 0, T_MAJ7 }, { 4, T_7 }, { 9, T_M7 }, { 5, T_M6 } } },
+        { "Samt",             kCatRnB, kNatMinor,  kRnB, 4, { { 5, T_M9 }, { 7, T_M7 }, { 0, T_M9 }, { 8, T_MAJ9 } } },
+
+        // ---- Duester / Film -------------------------------------------------------
+        { "Episch",           kCatDark, kNatMinor,  kTrap, 4, { { 8, T_MAJ }, { 10, T_MAJ }, { 0, T_MIN }, { 0, T_MIN } } },
+        { "Filmtrailer",      kCatDark, kDorian,    kTrap, 4, { { 0, T_MIN }, { 3, T_MAJ }, { 10, T_MAJ }, { 5, T_MAJ } } },
+        { "Gruselkabinett",   kCatDark, kPhrygian,  kTrap, 4, { { 0, T_MIN }, { 8, T_MIN }, { 0, T_MIN }, { 6, T_DIM } } },
+        { "Trauermarsch",     kCatDark, kNatMinor,  kTrap, 4, { { 0, T_MIN }, { 7, T_MIN }, { 8, T_MAJ }, { 5, T_MIN } } },
+        { "Schwebend",        kCatDark, kLydian,    kLoFi, 4, { { 0, T_MAJ7 }, { 2, T_MAJ }, { 0, T_MAJ7 }, { 2, T_MAJ } } },
+        { "Endzeit",          kCatDark, kHarmMinor, kTrap, 8, { { 0, T_MIN }, { 8, T_MAJ }, { 3, T_MAJ }, { 10, T_MAJ },
+                                                                { 0, T_MIN }, { 8, T_MAJ }, { 5, T_MIN }, { 7, T_MAJ } } },
+        { "Vampir",           kCatDark, kHarmMinor, kTrap, 4, { { 0, T_MMAJ7 }, { 8, T_MAJ7 }, { 5, T_M6 }, { 7, T_7B9 } } },
+    };
+    count = (int) (sizeof (t) / sizeof (t[0]));
+    return t;
+}
+
+inline int numPresets()                 { int n = 0; presetTable (n); return n; }
+inline const Preset& preset (int index) { int n = 0; const Preset* t = presetTable (n); return t[std::clamp (index, 0, n - 1)]; }
 
 // ----------------------------------------------------------------------------
 //  Engine
@@ -254,7 +356,7 @@ public:
         return noteName (c.root) + chordType (c.type).suffix;
     }
 
-    std::string numeral (int interval, bool lower) const
+    static std::string numeral (int interval, bool lower)
     {
         static const char* up[12] = { "I", "bII", "II", "bIII", "III", "IV", "#IV", "V", "bVI", "VI", "bVII", "VII" };
         static const char* lo[12] = { "i", "bii", "ii", "biii", "iii", "iv", "#iv", "v", "bvi", "vi", "bvii", "vii" };
@@ -269,18 +371,26 @@ public:
         if (c.secOf >= 0)
             return "V" + suffix + "/" + numeral (c.secOf, c.secMinor);
 
-        const bool lower = isMinorThird (c.type);
-        std::string r = numeral (c.root - s.key, lower);
+        return romanFor (c.root - s.key, c.type);
+    }
 
-        if      (c.type == T_DIM)  r += "\xc2\xb0";
-        else if (c.type == T_DIM7) r += "\xc2\xb0" "7";
-        else if (c.type == T_M7B5) r += "\xc3\xb8" "7";
-        else if (c.type == T_AUG)  r += "+";
+    // Stufe eines Akkords relativ zur Tonika (interval = Halbtoene ueber dem Grundton der Tonart)
+    static std::string romanFor (int interval, int type)
+    {
+        const std::string suffix = chordType (type).suffix;
+        const bool lower = isMinorThird (type);
+        std::string r = numeral (interval, lower);
+
+        if      (type == T_DIM)  r += "\xc2\xb0";
+        else if (type == T_DIM7) r += "\xc2\xb0" "7";
+        else if (type == T_M7B5) r += "\xc3\xb8" "7";
+        else if (type == T_AUG)  r += "+";
         else if (lower && ! suffix.empty() && suffix[0] == 'm') r += suffix.substr (1);
         else r += suffix;
 
         return r;
     }
+
 
     std::string chordNoteNames (const Chord& c) const
     {
@@ -404,6 +514,41 @@ public:
             chords.push_back (placeholder);
             rerollChord ((int) chords.size() - 1);
         }
+    }
+
+    // Setzt eine der bekannten Folgen in die aktuelle Tonart
+    void loadPreset (int index)
+    {
+        const Preset& p = preset (index);
+        s.scale = p.scale;
+        if (p.style >= 0) s.style = p.style;
+        s.numChords = std::clamp (p.n, 2, kMaxChords);
+
+        chords.clear();
+        for (int i = 0; i < s.numChords; ++i)
+        {
+            Chord c;
+            c.root   = pc (s.key + p.c[i].offset);
+            c.type   = p.c[i].type;
+            c.dia    = false;
+            c.degree = 0;
+            c.degree = functionalDegree (c);
+            c.level  = std::clamp (chordType (c.type).n - 3, 0, 3);
+            chords.push_back (c);
+        }
+        humanSeed = (uint32_t) rng();
+    }
+
+    static std::string presetRomans (int index)
+    {
+        const Preset& p = preset (index);
+        std::string out;
+        for (int i = 0; i < p.n; ++i)
+        {
+            if (i > 0) out += "  ";
+            out += romanFor (p.c[i].offset, p.c[i].type);
+        }
+        return out;
     }
 
     void transpose (int semitones)

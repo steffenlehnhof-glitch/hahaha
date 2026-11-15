@@ -28,7 +28,7 @@ public:
     bool acceptsMidi() const override                        { return true; }
     bool producesMidi() const override                       { return true; }
     bool isMidiEffect() const override                       { return false; }
-    double getTailLengthSeconds() const override             { return 1.0; }
+    double getTailLengthSeconds() const override             { return 3.0; }
 
     int getNumPrograms() override                            { return 1; }
     int getCurrentProgram() override                         { return 0; }
@@ -57,6 +57,8 @@ public:
     juce::String getKeyLabel() const;
 
     void generate();
+    void loadPreset (int presetIndex);      // bekannte Folge in die aktuelle Tonart setzen
+    int  getCurrentPreset() const;          // -1 = keine (generiert oder veraendert)
     void vary();
     void rerollChord (int index);
     bool toggleLock (int index);            // liefert den neuen Zustand
@@ -89,6 +91,7 @@ private:
     struct Snapshot { std::vector<purr::Chord> chords; uint32_t seed = 0; int key = 0; };
     std::vector<Snapshot> history;
     int historyPos = -1;
+    int currentPreset = -1;
 
     // ---- Uebergabe an den Audio-Thread ----------------------------------------
     juce::SpinLock progLock;
@@ -98,6 +101,7 @@ private:
     std::atomic<bool>   internalPlay { false };
     std::atomic<bool>   hostSync { true };
     std::atomic<int>    sound { 1 };
+    std::atomic<float>  reverbAmount { 0.25f };
     std::atomic<int>    auditionRequest { -1 };
     std::atomic<int>    currentChord { -1 };
     std::atomic<float>  beatPhase { 0.0f };
@@ -124,6 +128,8 @@ private:
 
     juce::MidiBuffer midiOut;
     purr::PreviewSynth synth;
+    juce::Reverb reverb;
+    float lastReverb = -1.0f;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PurrgressionProcessor)
 };

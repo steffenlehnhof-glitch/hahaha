@@ -4,35 +4,43 @@
 
 #include "ChordEngine.h"
 
-// Farben, Schrift und kleine Zeichen-Helfer fuer das Overlay
+#include <vector>
+
+// Farben, Schrift und Zeichen-Helfer fuer das Overlay ("Lila Drip")
 namespace theme
 {
-const juce::Colour bg       { 0xff110e1b };
-const juce::Colour bgHi     { 0xff191530 };
-const juce::Colour panel    { 0xff1b1730 };
-const juce::Colour panelHi  { 0xff262043 };
-const juce::Colour line     { 0xff3a3163 };
-const juce::Colour text     { 0xfff3eeff };
-const juce::Colour textDim  { 0xffa399c9 };
-const juce::Colour ink      { 0xff1d1633 };
+const juce::Colour bg         { 0xff06040b };
+const juce::Colour bgHi       { 0xff150b29 };
+const juce::Colour panel      { 0xff0e0a19 };
+const juce::Colour panelHi    { 0xff19122e };
+const juce::Colour line       { 0xff32245c };
+const juce::Colour text       { 0xfff3ecff };
+const juce::Colour textDim    { 0xff9285bd };
+const juce::Colour ink        { 0xff0a0613 };
 
-const juce::Colour pink     { 0xffff5fa2 };
-const juce::Colour mint     { 0xff6ef2c4 };
-const juce::Colour gold     { 0xffffd166 };
-const juce::Colour violet   { 0xffa98bff };
-const juce::Colour amber    { 0xffffa94d };
-const juce::Colour coral    { 0xffff7b7b };
-const juce::Colour sky      { 0xff6cc4ff };
+const juce::Colour purple     { 0xffa855f7 };
+const juce::Colour purpleHi   { 0xffc79bff };
+const juce::Colour purpleDeep { 0xff6d28d9 };
+const juce::Colour purpleDark { 0xff35186e };
+const juce::Colour magenta    { 0xffe879f9 };
+const juce::Colour gold       { 0xffffd166 };
 
+// Akkordarten (Farbcode der Karten)
+const juce::Colour violet     { 0xffb794ff };
+const juce::Colour teal       { 0xff5eead4 };
+const juce::Colour amber      { 0xfffbbf24 };
+const juce::Colour rose       { 0xfffb7185 };
+
+// Jeder Stil bekommt einen eigenen Ton aus der Lila-Familie
 inline juce::Colour styleAccent (int style)
 {
     switch (style)
     {
-        case purr::kTrap:   return juce::Colour (0xffb86bff);
-        case purr::kHipHop: return amber;
-        case purr::kLoFi:   return mint;
-        case purr::kJazz:   return sky;
-        default:            return pink;
+        case purr::kTrap:   return purple;
+        case purr::kHipHop: return juce::Colour (0xffd946ef);
+        case purr::kLoFi:   return juce::Colour (0xff8f9bff);
+        case purr::kJazz:   return juce::Colour (0xff7d6bff);
+        default:            return juce::Colour (0xfff472d0);
     }
 }
 
@@ -42,8 +50,8 @@ inline juce::Colour qualityColour (int quality)
     {
         case purr::kQMinor:    return violet;
         case purr::kQDominant: return amber;
-        case purr::kQTense:    return coral;
-        default:               return mint;
+        case purr::kQTense:    return rose;
+        default:               return teal;
     }
 }
 
@@ -62,6 +70,102 @@ inline juce::String T8 (const char* utf8) { return juce::String::fromUTF8 (utf8)
 inline juce::PathStrokeType roundStroke (float thickness)
 {
     return juce::PathStrokeType (thickness, juce::PathStrokeType::curved, juce::PathStrokeType::rounded);
+}
+
+// ---- Drips -------------------------------------------------------------------
+struct Drip { float x, width, length; };
+
+// Verteilt Tropfen zwischen left und right. Gleicher seed = gleiches Bild.
+inline std::vector<Drip> makeDrips (float left, float right, uint32_t seed, float minLen, float maxLen,
+                                    float minWidth, float maxWidth, float minGap, float maxGap)
+{
+    auto next = [&seed]
+    {
+        seed = seed * 1664525u + 1013904223u;
+        return (float) ((seed >> 8) & 0xffff) / 65535.0f;
+    };
+
+    std::vector<Drip> drips;
+    float x = left + minGap * next();
+
+    for (;;)
+    {
+        const float w = minWidth + (maxWidth - minWidth) * next();
+        x += w * 1.6f;
+        if (x + w * 1.6f > right)
+            break;
+
+        const float r = next();
+        drips.push_back ({ x, w, minLen + (maxLen - minLen) * r * r });   // wenige lange, viele kurze
+        x += w * 1.6f + minGap + (maxGap - minGap) * next();
+    }
+    return drips;
+}
+
+// Band von top bis baseY, aus dessen Unterkante die Tropfen herunterlaufen
+inline juce::Path dripPath (float left, float right, float top, float baseY, const std::vector<Drip>& drips)
+{
+    juce::Path p;
+    p.startNewSubPath (left, top);
+    p.lineTo (right, top);
+    p.lineTo (right, baseY);
+
+    for (auto it = drips.rbegin(); it != drips.rend(); ++it)
+    {
+        const float hw = it->width * 0.5f;
+        const float k = hw * 0.9f;
+        const float cx = it->x;
+        const float tip = baseY + juce::jmax (it->length, hw + k + 1.0f);
+
+        p.lineTo (cx + hw + k, baseY);
+        p.quadraticTo (cx + hw, baseY, cx + hw, baseY + k);
+        p.lineTo (cx + hw, tip - hw);
+        p.cubicTo (cx + hw * 1.35f, tip + hw * 0.95f, cx - hw * 1.35f, tip + hw * 0.95f, cx - hw, tip - hw);
+        p.lineTo (cx - hw, baseY + k);
+        p.quadraticTo (cx - hw, baseY, cx - hw - k, baseY);
+    }
+
+    p.lineTo (left, baseY);
+    p.closeSubPath();
+    return p;
+}
+
+// Zeichnet das Band samt Tropfen mit Farbverlauf und Glanzpunkten
+inline void drawDrips (juce::Graphics& g, float left, float right, float top, float baseY,
+                       const std::vector<Drip>& drips, juce::Colour colour, bool gloss = true)
+{
+    float longest = 0.0f;
+    for (const auto& d : drips)
+        longest = juce::jmax (longest, d.length);
+
+    g.setGradientFill (juce::ColourGradient (colour.brighter (0.25f), 0.0f, top,
+                                             colour.darker (0.55f), 0.0f, baseY + longest + 6.0f, false));
+    g.fillPath (dripPath (left, right, top, baseY, drips));
+
+    if (! gloss)
+        return;
+
+    g.setColour (juce::Colours::white.withAlpha (0.32f));
+    for (const auto& d : drips)
+    {
+        if (d.width < 5.0f) continue;
+        const float hw = d.width * 0.5f;
+        const float tip = baseY + juce::jmax (d.length, hw * 1.9f + 1.0f);
+        g.fillEllipse (d.x - hw * 0.55f, tip - hw * 1.1f, hw * 0.55f, hw * 0.8f);
+    }
+}
+
+// einzelner fallender Tropfen
+inline void drawDroplet (juce::Graphics& g, float cx, float cy, float size, juce::Colour colour)
+{
+    juce::Path p;
+    p.startNewSubPath (cx, cy - size);
+    p.cubicTo (cx + size * 0.2f, cy - size * 0.35f, cx + size * 0.62f, cy, cx + size * 0.62f, cy + size * 0.32f);
+    p.cubicTo (cx + size * 0.62f, cy + size * 0.85f, cx - size * 0.62f, cy + size * 0.85f, cx - size * 0.62f, cy + size * 0.32f);
+    p.cubicTo (cx - size * 0.62f, cy, cx - size * 0.2f, cy - size * 0.35f, cx, cy - size);
+    p.closeSubPath();
+    g.setColour (colour);
+    g.fillPath (p);
 }
 
 // ---- kleine Vektor-Icons (alle in ein Quadrat "area" gezeichnet) -----------

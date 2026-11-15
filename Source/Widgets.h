@@ -19,9 +19,11 @@ public:
         setColour (juce::ComboBox::arrowColourId, theme::textDim);
         setColour (juce::PopupMenu::backgroundColourId, theme::panelHi);
         setColour (juce::PopupMenu::textColourId, theme::text);
-        setColour (juce::PopupMenu::highlightedBackgroundColourId, theme::violet);
-        setColour (juce::PopupMenu::highlightedTextColourId, theme::ink);
-        setColour (juce::Slider::rotarySliderFillColourId, theme::pink);
+        setColour (juce::PopupMenu::highlightedBackgroundColourId, theme::purpleDeep);
+        setColour (juce::PopupMenu::highlightedTextColourId, theme::text);
+        setColour (juce::ScrollBar::thumbColourId, theme::line.brighter (0.35f));
+        setColour (juce::ListBox::backgroundColourId, juce::Colours::transparentBlack);
+        setColour (juce::Slider::rotarySliderFillColourId, theme::purple);
     }
 
     juce::Font getComboBoxFont (juce::ComboBox&) override   { return theme::font (14.5f); }
@@ -108,8 +110,24 @@ public:
         if (down)       fill = fill.darker (0.25f);
         else if (over)  fill = fill.brighter (primary ? 0.14f : 0.2f);
 
-        g.setColour (fill.withMultipliedAlpha (enabled ? 1.0f : 0.45f));
-        g.fillRoundedRectangle (b, radius);
+        if (primary)
+        {
+            g.setGradientFill (juce::ColourGradient (fill.brighter (0.2f), 0.0f, b.getY(), fill.darker (0.75f), 0.0f, b.getBottom(), false));
+            g.fillRoundedRectangle (b, radius);
+
+            // Lila laeuft von der Oberkante herunter
+            juce::Graphics::ScopedSaveState state (g);
+            juce::Path clip;
+            clip.addRoundedRectangle (b, radius);
+            g.reduceClipRegion (clip);
+            const auto drips = theme::makeDrips (b.getX() + 8.0f, b.getRight() - 8.0f, 4242u, 4.0f, 17.0f, 4.0f, 8.0f, 8.0f, 30.0f);
+            theme::drawDrips (g, b.getX(), b.getRight(), b.getY() - 2.0f, b.getY() + 4.0f, drips, juce::Colours::white.withAlpha (0.22f), false);
+        }
+        else
+        {
+            g.setColour (fill.withMultipliedAlpha (enabled ? 1.0f : 0.45f));
+            g.fillRoundedRectangle (b, radius);
+        }
 
         if (! primary)
         {
@@ -117,7 +135,7 @@ public:
             g.drawRoundedRectangle (b, radius, 1.2f);
         }
 
-        const auto fg = (primary ? theme::ink : theme::text).withMultipliedAlpha (enabled ? 1.0f : 0.4f);
+        const auto fg = (primary ? juce::Colours::white : theme::text).withMultipliedAlpha (enabled ? 1.0f : 0.4f);
 
         if (icon != Icon::none)
         {
@@ -164,7 +182,7 @@ private:
     juce::String text;
     Icon icon = Icon::none;
     bool primary = false, over = false, down = false;
-    juce::Colour accent = theme::pink;
+    juce::Colour accent = theme::purple;
     float fontSize = 15.0f;
 };
 
@@ -218,7 +236,7 @@ public:
 
 private:
     juce::String text;
-    juce::Colour accent = theme::pink;
+    juce::Colour accent = theme::purple;
     bool on = false, over = false;
 };
 
@@ -257,14 +275,15 @@ public:
         g.setColour (current ? theme::panelHi.brighter (0.14f) : (over || selected ? theme::panelHi.brighter (0.06f) : theme::panelHi));
         g.fillRoundedRectangle (b, 13.0f);
 
-        // Farbstreifen oben = Akkordart
+        // Farbstreifen oben = Akkordart, mit herunterlaufender Farbe
         {
             juce::Graphics::ScopedSaveState state (g);
             juce::Path clip;
             clip.addRoundedRectangle (b, 13.0f);
             g.reduceClipRegion (clip);
-            g.setColour (qc.withAlpha (current ? 1.0f : 0.85f));
-            g.fillRect (b.withHeight (5.0f));
+            const auto drips = theme::makeDrips (b.getX() + b.getWidth() * (compact ? 0.56f : 0.5f), b.getRight() - 38.0f, 77u + 31u * (uint32_t) index,
+                                                 7.0f, compact ? 14.0f : 28.0f, 5.0f, 8.0f, 4.0f, 16.0f);
+            theme::drawDrips (g, b.getX(), b.getRight(), b.getY(), b.getY() + 5.0f, drips, qc.withAlpha (current ? 1.0f : 0.88f), ! compact);
         }
 
         if (current)        { g.setColour (qc);                          g.drawRoundedRectangle (b, 13.0f, 2.0f); }
@@ -377,7 +396,7 @@ public:
         {
             if (isBlack (n)) continue;
             const juce::Rectangle<float> r (b.getX() + (float) w * ww + 0.75f, b.getY(), ww - 1.5f, b.getHeight());
-            g.setColour (isOn (n) ? colour : (n % 12 == 0 ? juce::Colour (0xffd9d0f3) : juce::Colour (0xffe6dffa)));
+            g.setColour (isOn (n) ? colour : (n % 12 == 0 ? juce::Colour (0xff3a2d63) : juce::Colour (0xff2c2250)));
             g.fillRoundedRectangle (r, 2.5f);
             ++w;
         }
@@ -389,14 +408,14 @@ public:
             const juce::Rectangle<float> r (b.getX() + (float) w * ww - bw * 0.5f, b.getY(), bw, bh);
             g.setColour (theme::bg);
             g.fillRoundedRectangle (r.expanded (0.8f), 2.5f);
-            g.setColour (isOn (n) ? colour.darker (0.15f) : theme::ink.brighter (0.08f));
+            g.setColour (isOn (n) ? colour.darker (0.25f) : juce::Colour (0xff0c0817));
             g.fillRoundedRectangle (r, 2.0f);
         }
     }
 
 private:
     std::vector<int> notes;
-    juce::Colour colour = theme::pink;
+    juce::Colour colour = theme::purple;
 };
 
 // =============================================================================
@@ -414,23 +433,23 @@ public:
     {
         const auto b = getLocalBounds().toFloat().reduced (1.0f);
 
-        g.setColour (theme::mint.withAlpha (over ? 0.2f : 0.1f));
+        g.setColour (theme::purple.withAlpha (over ? 0.2f : 0.1f));
         g.fillRoundedRectangle (b, 14.0f);
 
         juce::Path outline, dashed;
         outline.addRoundedRectangle (b.reduced (0.75f), 14.0f);
         const float dashes[2] = { 6.0f, 5.0f };
         juce::PathStrokeType (1.6f).createDashedStroke (dashed, outline, dashes, 2);
-        g.setColour (theme::mint);
+        g.setColour (theme::purple);
         g.fillPath (dashed);
 
         // Griffpunkte
-        g.setColour (theme::mint.withAlpha (0.8f));
+        g.setColour (theme::purple.withAlpha (0.8f));
         for (int row = 0; row < 3; ++row)
             for (int col = 0; col < 2; ++col)
                 g.fillEllipse (b.getX() + 15.0f + (float) col * 7.0f, b.getCentreY() - 9.0f + (float) row * 7.0f, 3.6f, 3.6f);
 
-        theme::drawNote (g, b.getX() + 46.0f, b.getCentreY() + 9.0f, 15.0f, theme::mint);
+        theme::drawNote (g, b.getX() + 46.0f, b.getCentreY() + 9.0f, 15.0f, theme::purple);
 
         auto textArea = b.withTrimmedLeft (68.0f).withTrimmedRight (10.0f);
         g.setColour (theme::text);
@@ -484,4 +503,141 @@ public:
 
 private:
     bool over = false, dragging = false;
+};
+
+// =============================================================================
+//  Preset-Browser: bekannte Akkordfolgen zum Anklicken
+// =============================================================================
+class PresetBrowser : public juce::Component,
+                      private juce::ListBoxModel
+{
+public:
+    std::function<void (int presetIndex)> onChoose;
+
+    PresetBrowser()
+    {
+        categoryBox.addItem ("Alle Stile", 1);
+        for (int c = 0; c < purr::kNumPresetCategories; ++c)
+            categoryBox.addItem (theme::T8 (purr::presetCategoryName (c)), c + 2);
+        categoryBox.setSelectedId (1, juce::dontSendNotification);
+        categoryBox.onChange = [this] { rebuild(); };
+        addAndMakeVisible (categoryBox);
+
+        for (int i = 0; i < purr::numPresets(); ++i)
+        {
+            names.add (theme::T8 (purr::preset (i).name));
+            romans.add (theme::T8 (purr::Engine::presetRomans (i).c_str()));
+        }
+
+        list.setModel (this);
+        list.setRowHeight (46);
+        list.setOutlineThickness (0);
+        list.setMouseMoveSelectsRows (true);
+        addAndMakeVisible (list);
+        rebuild();
+    }
+
+    void setCurrent (int presetIndex)
+    {
+        if (current != presetIndex)
+        {
+            current = presetIndex;
+            list.repaint();
+        }
+    }
+
+    void resized() override
+    {
+        auto a = getLocalBounds().reduced (12);
+        a.removeFromTop (50);
+        categoryBox.setBounds (a.removeFromTop (32));
+        a.removeFromTop (8);
+        list.setBounds (a);
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        const auto b = getLocalBounds().toFloat();
+        g.setColour (theme::panel);
+        g.fillRoundedRectangle (b, 16.0f);
+
+        {
+            juce::Graphics::ScopedSaveState state (g);
+            juce::Path clip;
+            clip.addRoundedRectangle (b, 16.0f);
+            g.reduceClipRegion (clip);
+            const auto drips = theme::makeDrips (b.getX() + 112.0f, b.getRight() - 8.0f, 9001u, 6.0f, 34.0f, 5.0f, 9.0f, 5.0f, 22.0f);
+            theme::drawDrips (g, b.getX(), b.getRight(), b.getY(), b.getY() + 7.0f, drips, theme::purple);
+        }
+
+        g.setColour (theme::line.withAlpha (0.6f));
+        g.drawRoundedRectangle (b.reduced (0.5f), 16.0f, 1.0f);
+
+        g.setColour (theme::text);
+        g.setFont (theme::font (16.0f, true));
+        g.drawText ("PRESETS", 14, 16, 110, 22, juce::Justification::centredLeft, false);
+        g.setColour (theme::textDim);
+        g.setFont (theme::font (11.5f));
+        g.drawText (juce::String (purr::numPresets()) + " bekannte Folgen", 14, 37, 160, 16, juce::Justification::centredLeft, false);
+    }
+
+private:
+    int getNumRows() override   { return (int) rows.size(); }
+
+    void paintListBoxItem (int row, juce::Graphics& g, int width, int height, bool rowIsSelected) override
+    {
+        if (row < 0 || row >= (int) rows.size())
+            return;
+
+        const int idx = rows[(size_t) row];
+        const bool isCurrent = idx == current;
+        const auto r = juce::Rectangle<int> (0, 0, width, height).toFloat().reduced (1.0f, 2.0f);
+
+        if (isCurrent)
+        {
+            g.setGradientFill (juce::ColourGradient (theme::purpleDeep, r.getX(), 0.0f, theme::purpleDark, r.getRight(), 0.0f, false));
+            g.fillRoundedRectangle (r, 9.0f);
+        }
+        else if (rowIsSelected)
+        {
+            g.setColour (theme::panelHi.brighter (0.08f));
+            g.fillRoundedRectangle (r, 9.0f);
+        }
+
+        g.setColour (isCurrent ? theme::purpleHi : theme::line.brighter (0.2f));
+        g.fillRoundedRectangle (r.getX() + 5.0f, r.getY() + 8.0f, 3.0f, r.getHeight() - 16.0f, 1.5f);
+
+        g.setColour (theme::text);
+        g.setFont (theme::font (14.0f, true));
+        g.drawFittedText (names[idx], 17, 5, width - 24, 18, juce::Justification::centredLeft, 1, 0.8f);
+
+        g.setColour (isCurrent ? theme::text.withAlpha (0.85f) : theme::textDim);
+        g.setFont (theme::font (11.5f));
+        g.drawFittedText (romans[idx], 17, 23, width - 24, 16, juce::Justification::centredLeft, 1, 0.6f);
+    }
+
+    void listBoxItemClicked (int row, const juce::MouseEvent&) override
+    {
+        if (row >= 0 && row < (int) rows.size() && onChoose != nullptr)
+            onChoose (rows[(size_t) row]);
+    }
+
+    void rebuild()
+    {
+        const int category = categoryBox.getSelectedId() - 2;
+        rows.clear();
+        for (int i = 0; i < purr::numPresets(); ++i)
+            if (category < 0 || purr::preset (i).category == category)
+                rows.push_back (i);
+
+        list.updateContent();
+        list.deselectAllRows();
+        list.repaint();
+    }
+
+    juce::ComboBox categoryBox;
+    juce::ListBox list;
+    juce::StringArray names, romans;
+    std::vector<int> rows;
+    int current = -1;
 };

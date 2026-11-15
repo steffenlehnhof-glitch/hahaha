@@ -38,10 +38,11 @@ private:
     CatComponent cat;
     std::array<ChordCard, purr::kMaxChords> cards;
     KeyboardView keyboard;
+    PresetBrowser presets;
 
     juce::ComboBox keyBox, scaleBox, styleBox;
     juce::ComboBox countBox, durationBox, voicingBox, patternBox, soundBox, octaveBox;
-    juce::Slider colourKnob, spiceKnob, humanKnob, swingKnob;
+    juce::Slider colourKnob, spiceKnob, humanKnob, swingKnob, reverbKnob;
     ToggleChip bassChip, leadChip, syncChip;
     PillButton generateButton, varyButton, prevButton, nextButton, playButton;
     DragTile dragTile;
@@ -51,7 +52,7 @@ private:
     juce::Rectangle<int> cardsArea, controlsPanel, legendArea;
 
     std::vector<PurrgressionProcessor::ChordView> views;
-    juce::Colour accent = theme::pink;
+    juce::Colour accent = theme::purple;
     juce::Random random;
 
     int  seenUiVersion = -1;

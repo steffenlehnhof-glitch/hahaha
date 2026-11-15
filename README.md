@@ -1,12 +1,15 @@
 # Purrgression
 
 Ein Akkordfolgen-Generator als VST3-Plugin für FL Studio (und jede andere DAW mit VST3),
-mit Moll, der Katze mit Kopfhörern, als Maskottchen auf dem Overlay.
+mit Moll, der Nachtkatze mit tropfenden Kopfhörern, als Maskottchen auf dem Overlay im dunklen Lila-Drip-Design.
 
-![Overlay](docs/overlay_start.png)
+![Overlay](docs/overlay_preset.png)
 
 ## Was das Plugin kann
 
+- **48 Presets** mit bekannten und häufig benutzten Akkordfolgen, sortiert nach Pop, Trap, Hip-Hop,
+  Lo-Fi, Jazz, R&B und Düster (z. B. Pop-Hymne I–V–vi–IV, Trap-Klassiker i–VI–III–VII, ii-V-I,
+  Andalusisch, Kanon, Royal Road). Ein Klick setzt die Folge in deine Tonart.
 - **Generieren** per Klick: Akkordfolgen mit 2 bis 8 Akkorden in 12 Tonarten und 8 Skalen
   (Moll natürlich/harmonisch/melodisch, Dorisch, Phrygisch, Dur, Mixolydisch, Lydisch).
 - **5 Stile** mit eigenen Vorlagen und Gewohnheiten: Trap, Hip-Hop, Lo-Fi, Jazz, R&B / Neo-Soul.
@@ -22,7 +25,8 @@ mit Moll, der Katze mit Kopfhörern, als Maskottchen auf dem Overlay.
 - **Übersichtliches Overlay**: Karten mit Akkordname, Stufe (römische Ziffern) und Tönen,
   Farbcode für Moll/Dur/Dominante/Spannung, Klaviatur mit den gespielten Tönen.
 - **MIDI in FL Studio**: Feld *MIDI ziehen* direkt in die Piano Roll oder Playlist ziehen.
-- **Vorschau-Sound** eingebaut (Keys, Pad, Pluck), dazu MIDI-Ausgang für andere Instrumente.
+- **10 eingebaute Instrumente**: E-Piano, Piano, Pad, Dark Pad, Strings, Pluck, Bell, Orgel, Gitarre, Flöte,
+  mit regelbarem Hall. Dazu MIDI-Ausgang für andere Instrumente.
 - **Tasten-Trigger**: die weißen Tasten ab C5 (MIDI 60) spielen Akkord 1 bis 8.
 - **Host-Sync**: läuft im Takt mit, sobald FL Studio abspielt.
 - Die Folge und alle Einstellungen werden im Projekt gespeichert.
@@ -75,6 +79,7 @@ zum Ausprobieren ohne DAW.
 | Bereich | Funktion |
 |---|---|
 | Tonart, Skala, Stil | Oben rechts. Tonart transponiert die Folge, Skala und Stil generieren neu. |
+| Presets | Rechts in der Liste eine Folge anklicken. Oben in der Liste nach Stil filtern. Danach lässt sie sich mit Variation, Würfel und Schloss weiter verändern. |
 | Karten | Klick: Akkord anhören. Schloss: festhalten. Würfel oder Rechtsklick: nur diesen Akkord neu. |
 | Generieren | Neue Folge. Abgeschlossene Akkorde bleiben stehen. |
 | Variation | Kleine Änderung an der aktuellen Folge. |
@@ -83,6 +88,7 @@ zum Ausprobieren ohne DAW.
 | MIDI ziehen | Feld festhalten und in die Piano Roll, Playlist oder auf einen Kanal ziehen. Doppelklick zeigt die Datei im Explorer. |
 | Farbe, Würze | Wirken beim nächsten Generieren. |
 | Voicing, Pattern, Dauer, Oktave, Bass, Humanize, Swing | Wirken sofort, die Akkorde bleiben gleich. |
+| Instrument, Hall | Eingebauter Klang und sein Hall-Anteil. „Aus“ schaltet den eingebauten Klang stumm. |
 | Host-Sync | Wenn an, spielt das Plugin mit, sobald FL Studio läuft. |
 
 ### Akkorde live an ein anderes Instrument schicken
@@ -92,7 +98,7 @@ Das Plugin gibt alles, was es spielt, auch als MIDI aus.
 1. Im Fenster von Purrgression oben links auf das Zahnrad → **VST wrapper settings**,
    unter MIDI bei **Output port** z. B. `1` einstellen.
 2. Beim Ziel-Instrument an derselben Stelle **Input port** auf `1` stellen.
-3. *Sound* in Purrgression auf „Aus“, damit nur das Ziel-Instrument klingt.
+3. *Instrument* in Purrgression auf „Aus“, damit nur das Ziel-Instrument klingt.
 
 ### Akkorde über Tasten spielen
 
@@ -104,24 +110,26 @@ solange die Taste gehalten wird.
 
 ```
 Source/ChordEngine.h       Harmonielehre, Generator, Variationen, Voicings, Patterns, MIDI-Datei (ohne JUCE)
-Source/PreviewSynth.h      eingebauter Vorschau-Synth (ohne JUCE)
+Source/PreviewSynth.h      die eingebauten Instrumente (ohne JUCE)
 Source/PluginProcessor.*   Sequenzer, MIDI ein/aus, Host-Sync, Speichern/Laden
 Source/PluginEditor.*      Overlay
 Source/Mascot.h            Moll, die Katze (komplett als Vektorgrafik gezeichnet)
-Source/Widgets.h           Akkordkarten, Klaviatur, Buttons, Drag-Feld
+Source/Widgets.h           Akkordkarten, Preset-Browser, Klaviatur, Buttons, Drag-Feld
 Source/Theme.h             Farben, Schrift, Icons
 tests/                     Tests für Engine und Plugin, rendert das Overlay als PNG
 ```
 
-Eigene Akkordfolgen-Vorlagen lassen sich in `ChordEngine.h` in der Tabelle in `pickTemplate()`
+Eigene Presets lassen sich in `ChordEngine.h` in der Tabelle in `presetTable()` ergänzen
+(Halbtöne über der Tonika plus Akkordtyp). Eigene Generator-Vorlagen lassen sich in `ChordEngine.h` in der Tabelle in `pickTemplate()`
 ergänzen (Zahlen 1 bis 7 sind die Stufen der gewählten Skala).
 
 ## Stand der Tests
 
 Der Code wurde unter Linux gegen JUCE 8.0.8 kompiliert, die Engine und der Prozessor
 (Abspielen, Tasten-Trigger, MIDI-Datei, Speichern/Laden) wurden automatisch getestet und das
-Overlay wurde gerendert (Bilder in `docs/`). **Nicht** getestet sind der Windows-Build und das
-Verhalten in FL Studio selbst, insbesondere Drag & Drop in die Piano Roll.
+Overlay wurde gerendert (Bilder in `docs/`). Der Windows-Build läuft über GitHub Actions.
+**Nicht** getestet ist das Verhalten in FL Studio selbst, insbesondere Drag & Drop in die Piano Roll,
+und die Instrumente wurden nur gemessen (Stimmung, Pegel), nicht angehört.
 
 ## Lizenz-Hinweis
 

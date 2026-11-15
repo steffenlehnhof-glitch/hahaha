@@ -111,6 +111,15 @@ int main (int argc, char** argv)
                         editor->pump();
                     }
 
+                if (auto* browser = dynamic_cast<PresetBrowser*> (c))
+                    for (int i = round; i < purr::numPresets(); i += 3)
+                    {
+                        browser->onChoose (i);
+                        CHECK (proc.getCurrentPreset() == i, "ui: preset is current");
+                        run (proc, 3);
+                        editor->pump();
+                    }
+
                 if (auto* slider = dynamic_cast<juce::Slider*> (c))
                     slider->setValue (0.25 + 0.25 * round, juce::sendNotificationSync);
 
@@ -120,7 +129,26 @@ int main (int argc, char** argv)
         }
         proc.setPlaying (false);
         run (proc, 300);
-        CHECK (proc.getChordViews().size() == 8, "ui: chord count follows the box");
+        CHECK ((int) proc.getChordViews().size() == proc.getSettings().numChords, "ui: chord count consistent");
+
+        // Alle Instrumente mit vollem Hall: Ausgang muss sauber bleiben
+        for (int snd = 1; snd < purr::kNumSounds; ++snd)
+        {
+            auto ss = proc.getSettings();
+            ss.sound = snd; ss.reverb = 1.0f; ss.pattern = purr::kSustain; ss.duration = 0;
+            proc.updateSettings (ss);
+            proc.setPlaying (true);
+            const auto r = run (proc, 94 * 3);
+            proc.setPlaying (false);
+            run (proc, 200);
+            std::printf ("  %-9s Peak %.3f\n", purr::soundName (snd), (double) r.peak);
+            CHECK (r.peak > 0.02f && r.peak <= 1.0f, "instrument level with reverb");
+        }
+        {
+            auto ss = proc.getSettings();
+            ss.sound = 1; ss.reverb = 0.25f; ss.duration = 1;
+            proc.updateSettings (ss);
+        }
 
         // 8 Akkorde, Jazz, laeuft gerade
         auto s = proc.getSettings();
@@ -136,13 +164,21 @@ int main (int argc, char** argv)
         proc.setPlaying (false);
         run (proc, 300);
 
-        // 3 Akkorde, Lo-Fi in Dur
+        // Preset "Trap-Klassiker" in F mit Bell, laeuft
         s = proc.getSettings();
-        s.style = purr::kLoFi; s.scale = purr::kMajor; s.key = 3; s.numChords = 3; s.colour = 0.6f;
+        s.key = 5; s.sound = 7; s.voicing = purr::kClose; s.pattern = purr::kSustain; s.swing = 0.0f; s.reverb = 0.4f;
         proc.updateSettings (s);
-        proc.toggleLock (0);
-        for (int i = 0; i < 70; ++i) editor->pump();
-        savePng (*ed, outDir.getChildFile ("overlay_lofi.png"));
+        proc.loadPreset (8);
+        CHECK (proc.getCurrentPreset() == 8 && proc.getChordViews().size() == 4, "preset loaded");
+        CHECK (proc.getChordViews()[0].name == "Fm" && proc.getChordViews()[1].name == "Db", "preset transposed to key");
+        proc.setPlaying (true);
+        run (proc, 94 * 5 + 30);
+        for (int i = 0; i < 37; ++i) editor->pump();
+        savePng (*ed, outDir.getChildFile ("overlay_preset_trap.png"));
+        proc.setPlaying (false);
+        run (proc, 300);
+        for (int i = 0; i < 20; ++i) editor->pump();
+        savePng (*ed, outDir.getChildFile ("overlay_preset_idle.png"));
     }
 
     // --- MIDI-Datei -------------------------------------------------------------------

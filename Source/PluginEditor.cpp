@@ -11,11 +11,12 @@ PurrgressionEditor::PurrgressionEditor (PurrgressionProcessor& p)
     // ---- Auswahlboxen ----------------------------------------------------------
     setupCombo (keyBox, { "C", "C# / Db", "D", "D# / Eb", "E", "F", "F# / Gb", "G", "G# / Ab", "A", "A# / Bb", "B" });
 
-    juce::StringArray scales, styles, voicings, patterns;
+    juce::StringArray scales, styles, voicings, patterns, sounds;
     for (int i = 0; i < purr::kNumScales; ++i)    scales.add (T8 (purr::scaleDef (i).name));
     for (int i = 0; i < purr::kNumStyles; ++i)    styles.add (T8 (purr::styleName (i)));
     for (int i = 0; i < purr::kNumVoicings; ++i)  voicings.add (T8 (purr::voicingName (i)));
     for (int i = 0; i < purr::kNumPatterns; ++i)  patterns.add (T8 (purr::patternName (i)));
+    for (int i = 0; i < purr::kNumSounds; ++i)    sounds.add (T8 (purr::soundName (i)));
 
     setupCombo (scaleBox, scales);
     setupCombo (styleBox, styles);
@@ -23,7 +24,7 @@ PurrgressionEditor::PurrgressionEditor (PurrgressionProcessor& p)
     setupCombo (durationBox, { "1/2 Takt", "1 Takt", "2 Takte" });
     setupCombo (voicingBox, voicings);
     setupCombo (patternBox, patterns);
-    setupCombo (soundBox, { "Aus", "Keys", "Pad", "Pluck" });
+    setupCombo (soundBox, sounds);
     setupCombo (octaveBox, { "-1", "0", "+1" });
 
     // ---- Regler + Schalter -----------------------------------------------------
@@ -31,6 +32,7 @@ PurrgressionEditor::PurrgressionEditor (PurrgressionProcessor& p)
     setupKnob (spiceKnob, 0.3);
     setupKnob (humanKnob, 0.2);
     setupKnob (swingKnob, 0.0);
+    setupKnob (reverbKnob, 0.25);
 
     bassChip.setText ("Bass");
     leadChip.setText ("Voice Leading");
@@ -125,18 +127,30 @@ PurrgressionEditor::PurrgressionEditor (PurrgressionProcessor& p)
         };
     }
 
+    // ---- Presets -------------------------------------------------------------------
+    presets.onChoose = [this] (int index)
+    {
+        proc.loadPreset (index);
+        selected = 0;
+        cat.excite();
+        say ({ "Ein Klassiker.", "Die kennt jedes Ohr.", "Bewährt und gut.", "Tausendmal gehört, tausendmal gewirkt.",
+               "Gute Wahl. Jetzt mach sie zu deiner." });
+        refresh();
+    };
+
     addAndMakeVisible (cat);
     addAndMakeVisible (keyboard);
+    addAndMakeVisible (presets);
 
     dragTile.fileProvider = [this] { return proc.writeTempMidi(); };
     dragTile.onHint       = [this] { say ({ "Festhalten und in die Piano Roll oder Playlist ziehen. Doppelklick zeigt die Datei." }); };
     dragTile.onDragged    = [this] { say ({ "Abgeliefert. Viel Spaß damit!", "MIDI ist unterwegs." }); };
     addAndMakeVisible (dragTile);
 
-    cat.say (T8 ("Miau, ich bin Moll! Drück auf Generieren und ich schnurr dir eine Akkordfolge vor."));
+    cat.say (T8 ("Miau, ich bin Moll. Nimm ein Preset von rechts oder drück auf Generieren."));
 
     setResizable (false, false);
-    setSize (980, 620);
+    setSize (1200, 660);
     refresh();
     startTimerHz (30);
 }
@@ -190,6 +204,7 @@ void PurrgressionEditor::pushSettings()
 {
     auto s = proc.getSettings();
     const float oldColour = s.colour, oldSpice = s.spice;
+    const int oldSound = s.sound;
 
     s.key       = keyBox.getSelectedId() - 1;
     s.scale     = scaleBox.getSelectedId() - 1;
@@ -204,6 +219,7 @@ void PurrgressionEditor::pushSettings()
     s.spice     = (float) spiceKnob.getValue();
     s.humanize  = (float) humanKnob.getValue();
     s.swing     = (float) swingKnob.getValue();
+    s.reverb    = (float) reverbKnob.getValue();
     s.bass      = bassChip.getState();
     s.voiceLead = leadChip.getState();
     s.hostSync  = syncChip.getState();
@@ -226,7 +242,12 @@ void PurrgressionEditor::pushSettings()
 
         case Result::revoiced:
         case Result::soundOnly:
-            if (! hintedKnobs && (std::abs (s.colour - oldColour) > 1.0e-6f || std::abs (s.spice - oldSpice) > 1.0e-6f))
+            if (s.sound != oldSound && s.sound > 0)
+            {
+                proc.audition (selected);
+                cat.say (T8 (purr::soundName (s.sound)) + T8 (". Hör mal rein."));
+            }
+            else if (! hintedKnobs && (std::abs (s.colour - oldColour) > 1.0e-6f || std::abs (s.spice - oldSpice) > 1.0e-6f))
             {
                 hintedKnobs = true;
                 say ({ "Farbe und Würze wirken beim nächsten Generieren." });
@@ -258,19 +279,21 @@ void PurrgressionEditor::refresh()
     spiceKnob.setValue (s.spice, dont);
     humanKnob.setValue (s.humanize, dont);
     swingKnob.setValue (s.swing, dont);
+    reverbKnob.setValue (s.reverb, dont);
 
     bassChip.setState (s.bass);
     leadChip.setState (s.voiceLead);
     syncChip.setState (s.hostSync);
 
     accent = theme::styleAccent (s.style);
-    for (auto* k : { &colourKnob, &spiceKnob, &humanKnob, &swingKnob })
+    for (auto* k : { &colourKnob, &spiceKnob, &humanKnob, &swingKnob, &reverbKnob })
         k->setColour (juce::Slider::rotarySliderFillColourId, accent);
     for (auto* c : { &bassChip, &leadChip, &syncChip })
         c->setAccent (accent);
     generateButton.setAccent (accent);
     cat.setAccent (accent);
     cat.setSubtitle (proc.getKeyLabel() + T8 (" \xc2\xb7 ") + T8 (purr::styleName (s.style)));
+    presets.setCurrent (proc.getCurrentPreset());
 
     numCards = (int) views.size();
     selected = juce::jlimit (0, juce::jmax (0, numCards - 1), selected);
@@ -364,20 +387,24 @@ void PurrgressionEditor::resized()
         place (scaleBox, 180, "SKALA");
         place (styleBox, 160, "STIL");
     }
-    area.removeFromTop (10);
+    area.removeFromTop (12);
+
+    // ---- rechts: Presets ueber die ganze Hoehe ------------------------------------
+    presets.setBounds (area.removeFromRight (264));
+    area.removeFromRight (12);
 
     // ---- Fusszeile: Aktionen -----------------------------------------------------
     auto footer = area.removeFromBottom (58);
     area.removeFromBottom (12);
-    generateButton.setBounds (footer.removeFromLeft (250));  footer.removeFromLeft (12);
-    varyButton.setBounds (footer.removeFromLeft (160));      footer.removeFromLeft (10);
-    prevButton.setBounds (footer.removeFromLeft (48));       footer.removeFromLeft (6);
-    nextButton.setBounds (footer.removeFromLeft (48));       footer.removeFromLeft (10);
-    playButton.setBounds (footer.removeFromLeft (132));      footer.removeFromLeft (12);
+    generateButton.setBounds (footer.removeFromLeft (240));  footer.removeFromLeft (12);
+    varyButton.setBounds (footer.removeFromLeft (150));      footer.removeFromLeft (10);
+    prevButton.setBounds (footer.removeFromLeft (46));       footer.removeFromLeft (6);
+    nextButton.setBounds (footer.removeFromLeft (46));       footer.removeFromLeft (10);
+    playButton.setBounds (footer.removeFromLeft (118));      footer.removeFromLeft (12);
     dragTile.setBounds (footer);
 
-    // ---- Mitte: Katze links, Akkorde + Regler rechts ---------------------------
-    cat.setBounds (area.removeFromLeft (250));
+    // ---- links die Katze, in der Mitte Akkorde + Regler --------------------------
+    cat.setBounds (area.removeFromLeft (240));
     area.removeFromLeft (12);
 
     cardsArea = area.removeFromTop (196);
@@ -395,39 +422,40 @@ void PurrgressionEditor::resized()
     auto rowA = inner.removeFromTop (50);
     {
         juce::ComboBox* boxes[6] = { &countBox, &durationBox, &voicingBox, &patternBox, &soundBox, &octaveBox };
-        const char* names[6] = { "AKKORDE", "DAUER", "VOICING", "PATTERN", "SOUND", "OKTAVE" };
-        const int weights[6] = { 8, 11, 11, 14, 9, 8 };
+        const char* names[6] = { "AKKORDE", "DAUER", "VOICING", "PATTERN", "INSTRUMENT", "OKTAVE" };
+        const int weights[6] = { 8, 11, 11, 14, 12, 8 };
         const int gap = 10;
         const int usable = rowA.getWidth() - 5 * gap;
         for (int i = 0; i < 6; ++i)
         {
-            auto col = rowA.removeFromLeft (i == 5 ? rowA.getWidth() : usable * weights[i] / 61);
+            auto col = rowA.removeFromLeft (i == 5 ? rowA.getWidth() : usable * weights[i] / 64);
             captions.push_back ({ col.removeFromTop (17), T8 (names[i]), left });
             boxes[i]->setBounds (col.removeFromTop (32));
             rowA.removeFromLeft (gap);
         }
     }
-    inner.removeFromTop (10);
+    inner.removeFromTop (12);
 
-    auto chips = inner.removeFromRight (176);
-    inner.removeFromRight (14);
+    auto chips = inner.removeFromRight (168);
+    inner.removeFromRight (12);
     {
-        const int gap = 7;
-        const int h = (chips.getHeight() - 2 * gap) / 3;
+        const int gap = 8;
+        const int h = juce::jmin (34, (chips.getHeight() - 2 * gap) / 3);
+        chips = chips.withSizeKeepingCentre (chips.getWidth(), 3 * h + 2 * gap);
         bassChip.setBounds (chips.removeFromTop (h));  chips.removeFromTop (gap);
         leadChip.setBounds (chips.removeFromTop (h));  chips.removeFromTop (gap);
         syncChip.setBounds (chips.removeFromTop (h));
     }
 
     {
-        juce::Slider* knobs[4] = { &colourKnob, &spiceKnob, &humanKnob, &swingKnob };
-        const char* names[4] = { "FARBE", "WÜRZE", "HUMANIZE", "SWING" };
-        const int w = inner.getWidth() / 4;
-        for (int i = 0; i < 4; ++i)
+        juce::Slider* knobs[5] = { &colourKnob, &spiceKnob, &humanKnob, &swingKnob, &reverbKnob };
+        const char* names[5] = { "FARBE", "WÜRZE", "HUMANIZE", "SWING", "HALL" };
+        const int w = inner.getWidth() / 5;
+        for (int i = 0; i < 5; ++i)
         {
             auto col = inner.removeFromLeft (w);
             captions.push_back ({ col.removeFromBottom (16), T8 (names[i]), centre });
-            knobs[i]->setBounds (col.reduced (4, 0));
+            knobs[i]->setBounds (col.reduced (3, 4));
         }
     }
 
@@ -436,26 +464,41 @@ void PurrgressionEditor::resized()
 
 void PurrgressionEditor::paint (juce::Graphics& g)
 {
+    const float width = (float) getWidth();
+
     g.fillAll (theme::bg);
-    g.setGradientFill (juce::ColourGradient (theme::bgHi, 0.0f, 0.0f, theme::bg, 0.0f, (float) getHeight() * 0.7f, false));
+    g.setGradientFill (juce::ColourGradient (theme::bgHi, 0.0f, 0.0f, theme::bg, 0.0f, (float) getHeight() * 0.55f, false));
     g.fillRect (getLocalBounds());
 
-    // Logo + Titel
-    const juce::Rectangle<float> mark (16.0f, 17.0f, 34.0f, 34.0f);
-    g.setColour (accent);
-    g.fillRoundedRectangle (mark, 10.0f);
-    theme::drawNote (g, mark.getCentreX() - 3.0f, mark.getCentreY() + 8.0f, 15.0f, theme::ink);
+    // Lila laeuft von der Oberkante: lange Tropfen in der freien Mitte, kurze ueber Titel und Auswahl
+    {
+        auto drips = theme::makeDrips (8.0f, 330.0f, 99u, 3.0f, 8.0f, 4.0f, 7.0f, 14.0f, 46.0f);
+        const auto mid   = theme::makeDrips (344.0f, 690.0f, 1234u, 8.0f, 50.0f, 6.0f, 11.0f, 5.0f, 26.0f);
+        const auto right = theme::makeDrips (704.0f, width - 8.0f, 555u, 3.0f, 8.0f, 4.0f, 7.0f, 14.0f, 50.0f);
+        drips.insert (drips.end(), mid.begin(), mid.end());
+        drips.insert (drips.end(), right.begin(), right.end());
+        theme::drawDrips (g, 0.0f, width, 0.0f, 6.0f, drips, theme::purple);
+
+        theme::drawDroplet (g, 452.0f, 66.0f, 5.0f, theme::purple.withAlpha (0.8f));
+        theme::drawDroplet (g, 583.0f, 58.0f, 3.6f, theme::purple.withAlpha (0.55f));
+    }
+
+    // Logo (Tropfen mit Note) + Titel
+    theme::drawDroplet (g, 34.0f, 38.0f, 21.0f, theme::purple);
+    theme::drawNote (g, 31.0f, 50.0f, 13.0f, juce::Colours::white);
 
     g.setColour (theme::text);
     g.setFont (theme::font (27.0f, true));
-    g.drawText ("Purrgression", 60, 12, 300, 30, juce::Justification::centredLeft, false);
+    g.drawText ("Purrgression", 62, 15, 290, 30, juce::Justification::centredLeft, false);
     g.setColour (theme::textDim);
     g.setFont (theme::font (12.5f));
-    g.drawText ("Akkordfolgen-Generator", 61, 41, 300, 16, juce::Justification::centredLeft, false);
+    g.drawText ("Akkordfolgen-Generator", 63, 44, 290, 16, juce::Justification::centredLeft, false);
 
     // Regler-Panel
     g.setColour (theme::panel);
     g.fillRoundedRectangle (controlsPanel.toFloat(), 16.0f);
+    g.setColour (theme::line.withAlpha (0.6f));
+    g.drawRoundedRectangle (controlsPanel.toFloat().reduced (0.5f), 16.0f, 1.0f);
 
     // Beschriftungen
     g.setColour (theme::textDim);

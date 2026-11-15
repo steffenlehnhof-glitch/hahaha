@@ -1,0 +1,35 @@
+name: Plugin bauen
+
+# Baut das VST3 automatisch auf GitHub - du musst lokal nichts installieren.
+# Ergebnis: Reiter "Actions" -> letzter Lauf -> unten bei "Artifacts" herunterladen.
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Konfigurieren
+        run: cmake -B build -A x64
+      - name: Bauen
+        run: cmake --build build --config Release --parallel
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Purrgression-Windows-VST3
+          path: build/Purrgression_artefacts/Release/VST3/
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Konfigurieren
+        run: cmake -B build -G Xcode "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64"
+      - name: Bauen
+        run: cmake --build build --config Release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Purrgression-macOS-VST3
+          path: build/Purrgression_artefacts/Release/VST3/

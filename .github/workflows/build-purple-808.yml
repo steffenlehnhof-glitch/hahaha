@@ -1,0 +1,38 @@
+name: Purple 808 bauen
+
+# Baut das 808-Plugin "Purple 808" automatisch auf GitHub.
+# Ergebnis: Reiter "Actions" -> letzter Lauf -> unten bei "Artifacts" herunterladen.
+
+on:
+  push:
+    paths:
+      - 'Purple808/**'
+      - '.github/workflows/build-purple-808.yml'
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Konfigurieren
+        run: cmake -S Purple808 -B build -A x64
+      - name: Bauen
+        run: cmake --build build --config Release --parallel
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Purple808-Windows-VST3
+          path: build/Purple808_artefacts/Release/VST3/
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Konfigurieren
+        run: cmake -S Purple808 -B build -G Xcode "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64"
+      - name: Bauen
+        run: cmake --build build --config Release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Purple808-macOS-VST3
+          path: build/Purple808_artefacts/Release/VST3/

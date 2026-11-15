@@ -7,7 +7,9 @@ on:
   push:
     paths-ignore:
       - 'PurpleSpice/**'
+      - 'Purple808/**'
       - '.github/workflows/build-purple-spice.yml'
+      - '.github/workflows/build-purple-808.yml'
   workflow_dispatch:
 
 jobs:
